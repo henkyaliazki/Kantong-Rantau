@@ -1,0 +1,15 @@
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const db=new DatabaseSync(':memory:');db.exec(readFileSync('drizzle/0000_wet_mole_man.sql','utf8'));
+db.prepare('INSERT INTO budgets(user,period,data) VALUES(?,?,?)').run('alice','2026-09','{}');
+assert.equal(db.prepare('SELECT * FROM budgets WHERE user=? AND period=?').all('bob','2026-09').length,0);
+const put=db.prepare('INSERT INTO transactions(id,user,period,date,type,amount,pocket,note) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET date=excluded.date,type=excluded.type,amount=excluded.amount,pocket=excluded.pocket,note=excluded.note WHERE transactions.user=excluded.user AND transactions.period=excluded.period');
+put.run('test','alice','2026-09','2026-09-21','income',100,'','test');
+assert.equal(put.run('test','bob','2026-09','2026-09-21','income',1000,'','attack').changes,0);
+assert.equal(put.run('test','alice','2026-09','2026-09-21','income',200,'','edit').changes,1);
+assert.equal(db.prepare('SELECT COUNT(*) n FROM transactions').get().n,1);
+assert.equal(db.prepare('DELETE FROM transactions WHERE id=? AND user=?').run('test','bob').changes,0);
+db.prepare('INSERT INTO orders(id,user,amount,status,created,mode) VALUES(?,?,?,?,?,?)').run('order1','alice',19000,'pending',1,'production');
+const paid=db.prepare("UPDATE orders SET status='paid',expires=COALESCE(expires,?) WHERE id=?");paid.run(100,'order1');paid.run(200,'order1');assert.equal(db.prepare('SELECT expires FROM orders WHERE id=?').get('order1').expires,100);
+console.log('Schema, ownership, idempotency and entitlement checks passed.');
