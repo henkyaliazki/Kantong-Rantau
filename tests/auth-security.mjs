@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {randomBytes} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import ts from 'typescript';
+const require=createRequire(import.meta.url);
+function load(path){const output=ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;const loadedModule={exports:{}};new Function('require','module','exports',output)(require,loadedModule,loadedModule.exports);return loadedModule.exports;}
+const {hashPassword,verifyPassword,encrypt,decrypt,newTotpSecret,makeTotp,totpStep}=load('lib/auth-crypto.ts');
+const {allowedRequestOrigin}=load('lib/request-origin.ts');
+process.env.AUTH_SECRET=randomBytes(32).toString('hex');
+const password='test-password-long-enough';
+const encoded=await hashPassword(password);
+assert.notEqual(encoded,await hashPassword(password),'Password salts are unique');
+assert.equal(await verifyPassword(password,encoded),true);
+assert.equal(await verifyPassword('wrong-password-long',encoded),false);
+assert.equal(await verifyPassword(password,null),false);
+const secret=newTotpSecret(),cipher=encrypt(secret);assert.equal(decrypt(cipher),secret);assert.ok(!cipher.includes(secret));
+const parts=cipher.split('.');parts[1]=Buffer.alloc(16).toString('hex');assert.throws(()=>decrypt(parts.join('.')));
+const timestamp=1800000000000,code=makeTotp(secret).generate({timestamp});assert.equal(totpStep(secret,code,timestamp),timestamp/30000);assert.equal(totpStep(secret,'1',timestamp),null);
+const req=origin=>new Request('http://127.0.0.1:3000/api/finance',{headers:{origin}});
+assert.equal(allowedRequestOrigin(req('http://localhost:3000'),'development'),true);
+assert.equal(allowedRequestOrigin(req('http://localhost:3000'),'production'),false);
+for(const origin of ['http://localhost:3001','https://localhost:3000','https://evil.example','null'])assert.equal(allowedRequestOrigin(req(origin),'development'),false);
+console.log('Password hashing, encryption tamper protection, TOTP and origin checks passed.');

@@ -1,19 +1,29 @@
 # Kantong Rantau
 
-Indonesian budgeting SaaS for salaried people living away from home. Built with React/Vinext, Cloudflare Workers and D1; platform ChatGPT sign-in; Midtrans Snap redirect payments.
+Indonesian budgeting SaaS for salaried people living away from home. Built with Next.js, React, MySQL and Drizzle; email/password sign-in, optional Google OAuth and TOTP 2FA; Midtrans Snap redirect payments.
 
 ## Development
 
-Node >=22.13, npm and Git are required. Install locked packages with npm run install:ci. Copy .env.example to .env, then npm run dev. Local sign-in simulates the account local_seedy; production relies exclusively on trusted platform identity headers. Every finance API query scopes records to the server-authenticated user.
+Windows setup (PowerShell, Node.js 22.12.0):
 
-Generate migrations with npm run db:generate. Build with npm run build. Apply each pending migration locally using Wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_wet_mole_man.sql. Do not replay applied migrations. Production migrations are deployed through Sites.
+1. Install MySQL 8.0 or newer and create two local databases: `CREATE DATABASE kantong_rantau CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;` and `CREATE DATABASE kantong_rantau_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`.
+2. Run `Copy-Item .env.example .env.local`, then edit `.env.local` in VS Code. Put the local MySQL credentials in `DATABASE_URL` and `TEST_DATABASE_URL`; do not commit that file or paste its password into chat.
+3. Run `npm.cmd ci`, `npm.cmd run db:migrate`, then `npm.cmd run dev`. Open http://127.0.0.1:3000. The migration and test scripts load `.env.local` directly.
+
+Both development and production require a verified database session. Automatic development identity and identity headers are not accepted. Every finance API query scopes records to the server-authenticated user.
+
+Generate MySQL migrations with `npm.cmd run db:generate`, apply them with `npm.cmd run db:migrate`, type-check with `npm.cmd run typecheck`, and build with `npm.cmd run build`. Historical D1 migrations remain in `drizzle/`; MySQL migrations are in `drizzle-mysql/`.
 
 ## Verification
 
 - npm run test:finance: fixed allocation-based daily allowance, cash, payday boundaries, debt payments, alerts and chart data.
-- npm run test:ownership: SQLite schema, cross-user write protection and payment grant idempotency.
-- npm run test:api: actual API handlers against in-memory SQLite, including migrations, Free/Premium limits, period copying, debt payments and ownership.
-- npx tsc --noEmit: types.
+- `npm.cmd run test:ownership`: MySQL schema, cross-user isolation, concurrent debt cap and payment grant idempotency. It requires `TEST_DATABASE_URL` and refuses databases whose name does not contain `test`.
+- `npm.cmd run typecheck`: TypeScript types.
+- `npm.cmd run build`: production Next.js build.
+
+## Moving existing D1/SQLite data
+
+Do not run this against production without a backup and maintenance window. Export the four D1 tables (`budgets`, `debts`, `orders`, `transactions`) to one JSON file shaped as `{ "budgets": [], "debts": [], "orders": [], "transactions": [] }`; keep every column unchanged, including IDs, `user`, `debt_id`, timestamps and JSON `data`. Apply the MySQL migration to an empty database, set `DATABASE_URL` in the current PowerShell session, and run `node scripts/migrate-json-to-mysql.mjs .\path\export.json`. The import is one transaction and rolls back completely on duplicate IDs or invalid relationships. Compare row counts and sample records before switching the application connection. The script never deletes source data.
 
 ## Billing
 
@@ -30,3 +40,9 @@ Choosing a different month in the editor copies the plan and preserves the origi
 Each period stores payday, opening cash, expected income and category allocations. Actual cash is opening cash plus recorded income minus recorded expenses. Remaining required and savings allocations are reserved. Spendable cash is limited by both the unreserved cash and remaining daily allocations. The displayed daily allowance is the monthly spending/jajan allocation divided by all days in the selected payday period, rounded down to rupiah. It stays constant throughout the period and is a plan, not a guarantee of available cash. Warnings appear in-app at 80% usage; overruns above 100% are marked overbudget. Each new period requires an explicit opening balance; transfers to savings outside spendable cash are recorded as expenses in a savings pocket.
 
 Keep .env, runtime folders, build archives and dependencies out of source control. The site starts private. Public launch requires access configuration, payment sandbox verification and the merchant's business/privacy/support policies.
+
+
+
+## Autentikasi pengguna
+
+Aplikasi kini menggunakan pendaftaran email/password, sesi MySQL, Google OAuth opsional, dan 2FA TOTP opsional. Akun development otomatis dan kepercayaan pada header identitas sudah dinonaktifkan. Jalankan npm.cmd run db:migrate, kemudian npm.cmd run dev dan buka /register. Lihat [panduan autentikasi](docs/AUTH-SETUP.md) untuk konfigurasi Google, recovery codes, dan pengujian.

@@ -1,28 +1,13 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import {FlatCompat} from '@eslint/eslintrc';
+import {fileURLToPath} from 'node:url';
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
+const compat=new FlatCompat({baseDirectory:fileURLToPath(new URL('.',import.meta.url))});
+const config=[
+  {ignores:['.next-auth-test/**','.next/**','out/**','dist/**','build/**','vendor/**','next-env.d.ts','vite.config.ts']},
+  ...compat.extends('next/core-web-vitals','next/typescript'),
   {
-    files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
-    rules: {
-      // These files are vendored verbatim from shadcn@4.17.0. Keep the
-      // registry source intact while applying the stricter rules to Site code.
-      "@typescript-eslint/no-unused-vars": "off",
-      "react-hooks/purity": "off",
-      "react-hooks/set-state-in-effect": "off",
-    },
+    files:['components/ui/**/*.{ts,tsx}','hooks/use-mobile.ts'],
+    rules:{'@typescript-eslint/no-unused-vars':'off','react-hooks/purity':'off','react-hooks/set-state-in-effect':'off'},
   },
-]);
-
-export default eslintConfig;
+];
+export default config;
